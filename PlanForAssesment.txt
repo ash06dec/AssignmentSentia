@@ -1,0 +1,19 @@
+Assessment
+
+Road to solution 	     2 hrs
+
+Create Architecture Diagram  1 hrs
+
+An Azure Datalake Gen 2 storage account. (ARM + Powershell) 1 hrs
+
+A key vault with a secret. 1 hrs
+
+A virtual network. 30 Mins
+
+A web app that can access both the datalake storage and the key vault secret. 3 hrs
+
+A load balancer that sits between the web app and the internet. 1 hrs
+
+Use tags to group the resources.  1 hrs
+
+Policy 1 hrs
