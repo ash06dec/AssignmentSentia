@@ -1,0 +1,105 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {    
+        "location": {
+            "type": "string",
+            "defaultValue": "westeurope",
+            "metadata": { "description": "The location for the storage account." }
+        },
+        "allowTrustedAzureServices": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": { "description": "If trusted Azure services are allowed access." }
+        },
+        "cannotDelete": {
+            "defaultValue": true,
+            "metadata": { "description": "Whether a resource delete lock should be added after creation." },
+            "type": "bool"
+        },
+        "defaultAclAction": {
+            "type": "string",
+            "defaultValue": "Deny",
+            "allowedValues": [
+                "Allow",
+                "Deny"
+            ],
+            "metadata": { "description": "The default access if no ACL matches: allow or deny." }
+        },
+        "storageSku": {
+            "type": "string",
+            "defaultValue": "Standard_LRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Standard_ZRS"
+            ],
+            "metadata": { "description": "The SKU for the storage account (locally redundant, zone redundant, geo redundant or geo redundant with readable secondary)." }
+        },      
+        "ipRules": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": { "description": "Array of IP address or ranges (CIDR notation) rules with option Deny or Allow action (default Allow). Example element { \"value\":\"87.213.22.6\", \"action\":\"Allow\" }." }
+        },
+        "virtualNetworkRules": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": { "description": "Array of virtual network rules with option Deny or Allow action (default Allow). Example element { \"id\":\"/subscriptions/0a1e54a3-58b3-40f8-82bd-efd7844068a5/resourceGroups/erwyn-d-rg/providers/Microsoft.Network/virtualNetworks/erwyntest01/subnets/default\", \"action\":\"Allow\" }." }
+        }
+        "storageAccountName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 24,
+            "metadata": { "description": "The name for the storage account (must be globally unique)." }
+        },
+    },
+    "variables": {
+        "productTag": "Data Lake Storage 1",
+        "aclBypass": "[concat('Logging, Metrics', if(parameters('allowTrustedAzureServices'), ', AzureServices', ''))]",
+        "hierarchicalNamespaceEnabled": true,
+        "storageKind": "StorageV2"
+    },
+    "resources": [{
+        "name": "[parameters('storageAccountName')]",
+        "type": "Microsoft.Storage/storageAccounts",
+        "location": "[parameters('location')]",
+        "tags": {
+            "Product": "[variables('productTag')]"
+        },
+        "apiVersion": "2018-07-01",
+        "dependsOn": [],
+        "kind": "[variables('storageKind')]",
+        "identity": {
+            "type": "SystemAssigned"
+        },
+        "properties": {
+            "networkAcls": {
+                "bypass": "[variables('aclBypass')]",
+                "virtualNetworkRules": "[parameters('virtualNetworkRules')]",
+                "ipRules": "[parameters('ipRules')]",
+                "defaultAction": "[parameters('defaultAclAction')]"
+            },
+            "supportsHttpsTrafficOnly": true,
+            "isHnsEnabled": "[variables('hierarchicalNamespaceEnabled')]",
+            "accessTier": "Hot"
+        },
+        "sku": {
+            "name": "[parameters('storageSku')]"
+        },
+        "resources": [{
+            "apiVersion": "2017-04-01",
+            "condition": "[parameters('cannotDelete')]",
+            "name": "[concat(parameters('storageAccountName'), '/Microsoft.Authorization/storageLock')]",
+            "type": "Microsoft.Storage/storageAccounts/providers/locks",
+            "dependsOn": [
+                "[parameters('storageAccountName')]"
+            ],
+            "properties": {
+                "level": "cannotDelete",
+                "notes": "Storage account should not be deleted"
+            }
+        }]
+    }],
+    "outputs": {}
+}

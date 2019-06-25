@@ -1,0 +1,20 @@
+{
+    "name": "azure-data-lake-storage-v3",
+    "type": "Microsoft.Authorization/policySetDefinitions",
+    "properties": {
+        "displayName": "Azure Data Lake Storage v3",
+        "policyType": "Custom",
+        "description": "Audits settings on the Storage account created by the Data Lake Storage v3 product.",
+        "parameters": {},
+        "policyDefinitions": [
+            {
+                "policyDefinitionId": "/subscriptions/#{subscriptionId}#/providers/Microsoft.Authorization/policyDefinitions/cbsp-azure-data-lake-storage-v3-hns-audit",
+                "parameters": {
+                    "productTagFilter": {
+                        "value": "Data Lake Storage 3.*"
+                    }
+                }
+            }
+        ]
+    }
+}

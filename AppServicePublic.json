@@ -1,0 +1,336 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "appServiceName": {
+            "type": "string",
+            "maxLength": 59,
+            "metadata": {
+                "description": "Resource name and hostname of the public facing App Service. Name needs to be globally unique."
+            }
+        },
+        "location": {
+            "type": "string",
+            "allowedValues": [
+                "West Europe",
+                "North Europe"
+            ],
+            "metadata": {
+                "description": "Location for the App Service Public, e.g., West Europe."
+            }
+        },
+        "applicationInsightsName": {
+            "type": "string",
+            "defaultValue": "",
+            "maxLength": 64,
+            "metadata": {
+                "description": "Resource name for the Application Insights resource to deploy."
+            }
+        },
+        "appServiceKind": {
+            "type": "string",
+            "defaultValue": "app",
+            "allowedValues": [
+                "app",
+                "api",
+                "functionapp",
+                "mobileapp",
+                "botapp"
+            ],
+            "metadata": {
+                "description": "The kind of App Service."
+            }
+        },
+        "appServicePlanName": {
+            "type": "string",
+            "maxLength": 39,
+            "metadata": {
+                "description": "Resource name for the App Service Plan. Name needs to be unique within the resource name. Specify the name of an existing App Service Plan to reuse it for more than one App Service."
+            }
+        },
+        "appServicePlanSkuName": {
+            "type": "string",
+            "defaultValue": "S1",
+            "allowedValues": [
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P1v2",
+                "P2",
+                "P2v2",
+                "P3",
+                "P3v2"
+            ],
+            "metadata": {
+                "description": "Public App Service Plan's pricing tier and instance size. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/"
+            }
+        },
+        "appServicePlanCapacity": {
+            "type": "int",
+            "defaultValue": 1,
+            "allowedValues": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10
+            ],
+            "metadata": {
+                "description": "Number of worker instances for the App Service Plan (1-10)."
+            }
+        },
+        "sasHttpLoggingBlobStorage": {
+            "type": "string",
+            "metadata": {
+                "description": "SAS URL for a container to store HTTP logs. Leave empty to use filesystem logging."
+            }
+        },
+        "sasAppLoggingBlobStorage": {
+            "type": "string",
+            "metadata": {
+                "description": "SAS URL for a container to store application logs. Leave empty to use only filesystem logging."
+            }
+        },
+        "appSettings": {
+            "type": "secureObject",
+            "defaultValue": {},
+            "metadata": {
+                "description": "App settings for the App Service in the form of JSON with simple name/value pairs."
+            }
+        },
+        "phpVersion": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The required PHP version in the App Service. Leave empty to disable PHP. Otherwise, e.g., 5.6"
+            }
+        },
+        "use32BitWorkerProcess": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "True if a 32-bit worker process must be used, false if a 64-bit worker process must be used."
+            }
+        },
+        "webSocketsEnabled": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "True if web sockets must be enabled, false otherwise."
+            }
+        },
+        "siteExtensionIDs": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": {
+                "description": "The ids of site extensions to install. Leave empty when no extensions are needed. Otherwise, e.g., [\"python352x64\"]"
+            }
+        },
+        "requireClientCertificates": {
+            "type": "bool",
+            "defaultValue": false,
+            "metadata": {
+                "description": "True if client certificates must be required for mutual TLS authentication, false otherwise."
+            }
+        },
+        "authenticationClientId": {
+            "type": "string",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The Client ID (also known as Application ID) of the registered application in Azure AD for user authentication. When this is left empty, turn key authentication will be off for the App Service."
+            }
+        },
+        "authenticationClientSecret": {
+            "type": "securestring",
+            "defaultValue": "",
+            "metadata": {
+                "description": "The Client Secret (also known as app password) of the registered application in Azure AD for user authentication."
+            }
+        },
+        "ipSecurityRestrictions": {
+            "type": "array",
+            "defaultValue": [],
+            "metadata": {
+                "description": "An array of IP restriction rules."
+            }
+        },
+        "ftpsState": {
+            "type": "string",
+            "defaultValue": "Disabled",
+            "AllowedValues": [
+                "Disabled",
+                "FtpsOnly",
+                "AllAllowed"
+            ]
+        }
+    },
+    "variables": {
+        "productTag": "App Service Public 1",
+        "identityResourceId": "[concat(resourceId('Microsoft.Web/sites', parameters('appServiceName')),'/providers/Microsoft.ManagedIdentity/Identities/default')]",
+        "serverFarmResourceId": "[resourceId('Microsoft.Web/serverfarms', parameters('appServicePlanName'))]",
+        "appServiceResourceId": "[resourceId('Microsoft.Web/sites', parameters('appServiceName'))]",
+        "applicationInsightsResourceId": "[resourceId('Microsoft.Insights/components', parameters('applicationInsightsName'))]",
+        "logRetentionInDays": 30,
+        "siteExtensionIDs": "[if(empty(parameters('siteExtensionIDs')), json('[\"ignore\"]'), parameters('siteExtensionIDs'))]"
+    },
+    "resources": [{
+            "apiVersion": "2018-02-01",
+            "name": "[parameters('appServicePlanName')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[parameters('location')]",
+            "sku": {
+                "name": "[parameters('appServicePlanSkuName')]",
+                "capacity": "[parameters('appServicePlanCapacity')]"
+            },
+            "tags": {
+                "Product": "[variables('productTag')]"
+            }
+        },
+        {
+            "type": "Microsoft.Web/serverfarms/providers/locks",
+            "apiVersion": "2016-09-01",
+            "name": "[concat(parameters('appServicePlanName'), '/Microsoft.Authorization/serverfarmLock')]",
+            "dependsOn": [
+                "[variables('serverFarmResourceId')]"
+            ],
+            "properties": {
+                "level": "CanNotDelete",
+                "notes": "App Service Plan should not be deleted."
+            }
+        },
+        {
+            "apiVersion": "2018-02-01",
+            "name": "[parameters('appServiceName')]",
+            "type": "Microsoft.Web/sites",
+            "location": "[parameters('location')]",
+            "kind": "[parameters('appServiceKind')]",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "dependsOn": [
+                "[variables('serverFarmResourceId')]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', variables('serverFarmResourceId'))]": "empty",
+                "Product": "[variables('productTag')]"
+            },
+            "properties": {
+                "serverFarmId": "[variables('serverFarmResourceId')]",
+                "siteConfig": {
+                    "alwaysOn": true
+                },
+                "clientCertEnabled": "[parameters('requireClientCertificates')]",
+                "clientAffinityEnabled": false,
+                "httpsOnly": true
+            },
+            "resources": [
+                {
+                    "type": "Microsoft.Web/sites/providers/locks",
+                    "apiVersion": "2016-09-01",
+                    "name": "[concat(parameters('appServiceName'), '/Microsoft.Authorization/siteLock')]",
+                    "dependsOn": [
+                        "[variables('appServiceResourceId')]"
+                    ],
+                    "properties": {
+                        "level": "CanNotDelete",
+                        "notes": "App Service should not be deleted."
+                    }
+                },
+                {
+                    "name": "web",
+                    "type": "config",
+                    "apiVersion": "2018-02-01",
+                    "dependsOn": [
+                        "[variables('appServiceResourceId')]"
+                    ],
+                    "properties": {
+                        "phpVersion": "[parameters('phpVersion')]",
+                        "use32BitWorkerProcess": "[parameters('use32BitWorkerProcess')]",
+                        "webSocketsEnabled": "[parameters('webSocketsEnabled')]",
+                        "ftpsState": "[parameters('ftpsState')]",
+                        "ipSecurityRestrictions": "[parameters('ipSecurityRestrictions')]"
+                    }
+                },
+                {
+                    "name": "appsettings",
+                    "type": "config",
+                    "apiVersion": "2018-02-01",
+                    "dependsOn": [
+                        "[variables('appServiceResourceId')]"
+                    ],
+                    "properties": "[union(parameters('appSettings'), json(concat('{\"APPINSIGHTS_INSTRUMENTATIONKEY\": \"', reference(variables('applicationInsightsResourceId'),'2015-05-01').InstrumentationKey, '\"}')))]"
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2018-02-01",
+            "name": "[concat(parameters('appServiceName'),'/','logs')]",
+            "location": "[parameters('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites/config',parameters('appServiceName'),'appsettings')]"
+            ],
+            "properties": {
+                "applicationLogs": {
+                    "fileSystem": {
+                        "level": "Off"
+                    },
+                    "azureTableStorage": {
+                        "level": "Off",
+                        "sasUrl": null
+                    },
+                    "azureBlobStorage": {
+                        "level": "[if(equals(parameters('sasAppLoggingBlobStorage'),''), 'Off', 'Information')]",
+                        "sasUrl": "[parameters('sasAppLoggingBlobStorage')]",
+                        "retentionInDays": "[variables('logRetentionInDays')]"
+                    }
+                },
+                "httpLogs": {
+                    "fileSystem": {
+                        "retentionInMb": 35,
+                        "retentionInDays": "[variables('logRetentionInDays')]",
+                        "enabled": "[equals(parameters('sasHttpLoggingBlobStorage'),'')]"
+                    },
+                    "azureBlobStorage": {
+                        "sasUrl": "[parameters('sasHttpLoggingBlobStorage')]",
+                        "retentionInDays": "[variables('logRetentionInDays')]",
+                        "enabled": "[not(equals(parameters('sasHttpLoggingBlobStorage'),''))]"
+                    }
+                },
+                "failedRequestsTracing": {
+                    "enabled": false
+                },
+                "detailedErrorMessages": {
+                    "enabled": false
+                }
+            }
+        },
+        {
+            "condition": "[not(equals(variables('siteExtensionIDs')[copyIndex()], 'ignore'))]",
+            "name": "[concat(parameters('appServiceName'),'/', variables('siteExtensionIDs')[copyIndex()])]",
+            "type": "Microsoft.Web/sites/siteextensions",
+            "apiVersion": "2018-02-01",
+            "properties": {},
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites',parameters('appServiceName'))]",
+                "[resourceId('Microsoft.Web/sites/config',parameters('appServiceName'),'web')]"
+            ],
+            "copy": {
+                "name": "siteExtensions",
+                "count": "[length(variables('siteExtensionIDs'))]"
+            }
+        }
+    ],
+    "outputs": {
+        "appServiceMsiObjectId": {
+            "type": "string",
+            "value": "[reference(variables('identityResourceId'), '2015-08-31-preview').principalId]"
+        }
+    }
+}
